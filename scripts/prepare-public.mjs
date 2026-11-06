@@ -4,7 +4,7 @@
  * 仅使用 Node 原生 fs，不引入任何新依赖。
  * 用法：pnpm build:deploy（先 pnpm build 编译，再执行本脚本）
  */
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -33,9 +33,24 @@ for (const entry of readdirSync(dest)) {
   removed += 1;
 }
 
-// 3. 逐顶层条目复制，语义明确：src 下的每个条目放到 dest 下同名位置
+// 3. 递归复制。
+// 注意：不要用 fs.cpSync —— 在 Windows + 中文路径下该 API 会让 node 进程异常退出（退出码 127、无任何输出）。
+// 这里改为 copyFileSync + readdirSync 手动递归，跨平台行为可预期。
+function copyDir(from, to) {
+  mkdirSync(to, { recursive: true });
+  for (const entry of readdirSync(from)) {
+    const fromPath = join(from, entry);
+    const toPath = join(to, entry);
+    if (statSync(fromPath).isDirectory()) copyDir(fromPath, toPath);
+    else copyFileSync(fromPath, toPath);
+  }
+}
+
 for (const entry of readdirSync(src)) {
-  cpSync(join(src, entry), join(dest, entry), { recursive: true });
+  const fromPath = join(src, entry);
+  const toPath = join(dest, entry);
+  if (statSync(fromPath).isDirectory()) copyDir(fromPath, toPath);
+  else copyFileSync(fromPath, toPath);
 }
 
 // 4. 统计并输出结果
