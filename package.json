@@ -1,0 +1,22 @@
+{
+  "name": "jobhub",
+  "version": "1.0.0",
+  "private": true,
+  "description": "JobHub · 个人求职工作台（React + Node/TS + MariaDB 单体）",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=18.18"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @jobhub/server dev",
+    "dev:server": "pnpm --filter @jobhub/server dev",
+    "dev:client": "pnpm --filter @jobhub/client dev",
+    "build": "pnpm --filter @jobhub/server build && pnpm --filter @jobhub/client build",
+    "build:server": "pnpm --filter @jobhub/server build",
+    "build:client": "pnpm --filter @jobhub/client build",
+    "build:deploy": "pnpm build && node scripts/prepare-public.mjs",
+    "migrate": "pnpm --filter @jobhub/server migrate",
+    "seed": "pnpm --filter @jobhub/server seed",
+    "typecheck": "pnpm --filter @jobhub/server typecheck"
+  }
+}

@@ -1,0 +1,77 @@
+/* ============================================================
+ * JobHub 设计 token
+ * 核心配色/描边/圆角/阴影原样复用《个人求职工作台-设计规范.md》（浅色 + 深色）。
+ * 追加少量工程辅助 token（字体栈/布局尺寸/回弹缓动/点阵色），不改变核心配色。
+ * ============================================================ */
+
+:root {
+  --bg: #fdf6ec;
+  --card: #fffdf7;
+  --line: #2b2b2b;
+  --ink: #2b2b2b;
+  --text: #2b2b2b;
+  --sub: #6d6459;
+  --muted: #a99f90;
+
+  --brand: #7c6cf0;
+  --brand-soft: #efe9ff;
+  --brand-2: #9d8bff;
+
+  --green: #3fb87b;
+  --green-soft: #e2f6ea;
+  --amber: #f6a935;
+  --amber-soft: #fdefd6;
+  --pink: #ff7eb3;
+  --pink-soft: #ffe6f0;
+  --blue: #5aa9f6;
+  --blue-soft: #e3f0fe;
+
+  --stroke: 2.5px;
+  --radius: 22px 20px 24px 18px / 20px 24px 18px 22px;
+  --radius-pill: 16px 12px 16px 12px / 12px 16px 12px 16px;
+  --radius-s: 14px 10px 14px 10px / 10px 14px 10px 14px;
+
+  --shadow: 4px 5px 0 rgba(43, 43, 43, 0.85);
+  --shadow-h: 6px 8px 0 rgba(124, 108, 240, 0.85);
+
+  --dot: rgba(43, 43, 43, 0.05);
+
+  --font-hand: "Comic Sans MS", "Chalkboard SE", "Comic Neue", "Yuanti SC",
+    "PingFang SC", "Microsoft YaHei", sans-serif;
+
+  --sidebar-w: 236px;
+  --main-max: 1080px;
+  --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --bg: #1e1b26;
+  --card: #2a2636;
+  --line: #e8e2f5;
+  --ink: #e8e2f5;
+  --text: #f3eeff;
+  --sub: #c3b9dc;
+  --muted: #8b81a3;
+
+  --brand: #b3a4ff;
+  --brand-soft: #38324f;
+  --brand-2: #c9bcff;
+
+  --green: #5fd39a;
+  --green-soft: #223b2e;
+  --amber: #ffc267;
+  --amber-soft: #3d2f14;
+  --pink: #ff9dc6;
+  --pink-soft: #3d2333;
+  --blue: #7ec0ff;
+  --blue-soft: #1e2f45;
+
+  --shadow: 4px 5px 0 rgba(232, 226, 245, 0.35);
+  --shadow-h: 6px 8px 0 rgba(179, 164, 255, 0.55);
+
+  --dot: rgba(232, 226, 245, 0.06);
+
+  color-scheme: dark;
+}
