@@ -69,6 +69,7 @@ pnpm dev:client        # http://localhost:5173
 | `pnpm migrate` | **显式**执行数据库迁移（`knex migrate:latest`） |
 | `pnpm seed` | 手动写入默认用户 + 5 阶段路线图（库已有联调数据，**发布无需执行**） |
 | `pnpm typecheck` | 后端类型检查（tsc --noEmit） |
+| `pnpm import:data <file.json>` | 导入豆包等整理好的 JSON：默认**演练不写库**，加 `--write` 才写入；`--mode=replace` 覆盖式导入 |
 | `pnpm --filter @jobhub/server start` | 生产模式启动后端（`node dist/index.js`）；pnpm 会把 cwd 设为 `server/`，保证 `dotenv` 读到 `server/.env`。**勿从仓库根直接 `node server/dist/index.js`** |
 
 ## 部署（共享主机 cPanel · Phusion Passenger）
@@ -179,4 +180,30 @@ curl -s http://127.0.0.1:3000/api/v1/apps?page=1&pageSize=20 \
 - 完整接口清单（含每个接口的参数表、请求/响应示例、错误码、curl 示例）：**`docs/api-reference.md`**
 - 机器可读规范（OpenAPI 3.1，可导入 Postman / Apifox / Swagger UI）：**`docs/openapi.yaml`**
 - 批量导入的数据字段定义与去重规则：**`docs/import-schema.md`**
+
+## 导入数据（豆包等助手整理好的 JSON）
+
+1. 把 `docs/import-schema.md` 整份发给助手，让它按规范产出导入 JSON；
+2. 先演练，确认没有报错：
+
+```bash
+pnpm import:data ./我的投递记录.json          # 默认 dryRun，不写库
+```
+
+3. 确认「新增 / 更新 / 跳过」数字符合预期后，再实写：
+
+```bash
+pnpm import:data ./我的投递记录.json --write
+```
+
+4. 首次初始化、想覆盖旧数据时用 `--mode=replace`（会清空 11 张业务数据表，**保留账号、路线图阶段与任务**）：
+
+```bash
+pnpm import:data ./我的投递记录.json --write --mode=replace
+```
+
+脚本会读取 `server/.env` 里的 `JOBHUB_API_KEY`，默认连 `http://127.0.0.1:3000`（可用环境变量 `BASE_URL` 覆盖）。
+演练返回 `errors` 非空时脚本会拒绝实写，并逐条打印出错位置——把这些位置反馈给助手修正后重新导出即可。
+
+> 安全提示：`replace` 是物理删除，不可逆。执行前先用 `GET /api/v1/export` 或 `backups/` 留一份备份。
 

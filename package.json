@@ -17,6 +17,7 @@
     "build:deploy": "pnpm build && node scripts/prepare-public.mjs",
     "migrate": "pnpm --filter @jobhub/server migrate",
     "seed": "pnpm --filter @jobhub/server seed",
+    "import:data": "node scripts/import-data.mjs",
     "typecheck": "pnpm --filter @jobhub/server typecheck"
   }
 }
