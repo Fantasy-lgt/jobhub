@@ -13,6 +13,31 @@ function toBool(value: string | undefined, fallback = false): boolean {
   return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
 }
 
+/** 逗号分隔字符串 → 去空数组（IP 白名单等列表型配置）。 */
+function toList(value: string | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+/**
+ * 反向代理信任层数（Fastify trustProxy）。
+ * - 未配置 / 0 / false → false（不信任任何代理，直接取 socket 地址）
+ * - true/1/yes/on → 1（只信任最近一层代理，最安全，也是生产推荐值）
+ * - 其他正整数 n → n（多层代理）
+ * 用 1 而不是 true：`true` 会无条件相信 X-Forwarded-For 最左值，客户端可伪造 IP 绕过白名单/限流。
+ */
+function toTrustProxy(value: string | undefined): boolean | number {
+  if (!value) return false;
+  const raw = value.trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(raw)) return 1;
+  const n = Number(raw);
+  if (Number.isFinite(n) && n > 1) return Math.floor(n);
+  return false;
+}
+
 export interface DbConfig {
   host: string;
   port: number;
@@ -39,6 +64,12 @@ export interface AppConfig {
   db: DbConfig;
   jwtSecret: string;
   adminPassword: string;
+  /** 对外开放接口的 API Key（请求头 X-API-Key）；空串 = 该通道整体禁用 */
+  apiKey: string;
+  /** API Key 通道允许的来源 IP（归一化后精确匹配）；空数组 = 不限来源 */
+  apiKeyAllowIps: string[];
+  /** 反向代理信任层数（Fastify trustProxy）：false=不信任，1=只信任一层代理 */
+  trustProxy: boolean | number;
   deepseek: DeepSeekConfig;
 }
 
@@ -58,6 +89,10 @@ export const config: AppConfig = {
   },
   jwtSecret: process.env.JWT_SECRET || '',
   adminPassword: process.env.ADMIN_PASSWORD || '',
+  // 对外接口 API Key：仅从环境变量读取，绝不落日志；空串时 /api/v1 的 X-API-Key 通道自动关闭
+  apiKey: (process.env.JOBHUB_API_KEY || '').trim(),
+  apiKeyAllowIps: toList(process.env.JOBHUB_API_KEY_ALLOW_IPS),
+  trustProxy: toTrustProxy(process.env.TRUST_PROXY),
   deepseek: {
     apiKey: process.env.DEEPSEEK_API_KEY || '',
     model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',

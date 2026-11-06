@@ -78,6 +78,9 @@ pnpm dev:client        # http://localhost:5173
 - `.env` **不进版本库**（`jobhub/.gitignore` 已排除任意层级的 `.env`），也**不随项目包上传**；生产配置请在 cPanel「Setup Node.js App → Environment variables」逐条填写，或用 cPanel 文件管理器在 `server/.env` 单独创建。
 - **`NODE_ENV=production` 必须由宿主 / cPanel 注入**。未注入时 `config.isProd=false`，登录写入的 httpOnly cookie 不会带 `Secure` 属性，生产 HTTPS 下鉴权行为不符合预期。`Secure` cookie **仅在 HTTPS 下回传**，所以发布前必须确认站点已启用 HTTPS；若以明文 HTTP 提供页面又注入了 `NODE_ENV=production`，会表现为「登录成功但随即跳登录」。
 - 其余必需变量：`DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` / `JWT_SECRET` / `ADMIN_PASSWORD` / `DEEPSEEK_API_KEY` 等，模板见 `.env.example`。`PORT` 留空由 Passenger 注入，`HOST` 设为 `127.0.0.1`。
+- **`TRUST_PROXY`（反向代理场景必看）**：默认 `false`——不信任任何 `X-Forwarded-For`，应用只看直连 IP。部署在 Nginx / Apache / Passenger 之后时设为 **`1`**（或 `true`/`yes`/`on`，等价于一层），否则应用看到的客户端 IP 都是代理地址，会导致 `JOBHUB_API_KEY_ALLOW_IPS` 白名单失效（表现为正常来源也 403）、API Key 限流把所有人算成同一个 IP。多层代理填层数（`2`、`3`…）；填非数字无效值等同 `false`。
+- **`JOBHUB_API_KEY` / `JOBHUB_API_KEY_ALLOW_IPS`**：外部程序接入用，见下文「外部程序接入」。
+- **反向代理请求体上限**：`POST /api/v1/import` 单次上限 10 MB（其余接口 2 MB），代理层需同步 ≥ 10 MB（Nginx `client_max_body_size 10m;`、Apache `LimitRequestBody 10485760`），否则代理会先返回自己的 413 页面（非 `{code,data,message}` 结构）。
 
 ### 发布步骤
 
@@ -108,6 +111,7 @@ pnpm dev:client        # http://localhost:5173
 | 登录成功但随即跳登录 | 多为「明文 HTTP + `NODE_ENV=production`」：`Secure` cookie 在 HTTP 下不回传。确认站点已启用 HTTPS 后重启并复登；**不要**靠去掉 `NODE_ENV` 绕过 |
 | prod 迁移目录报错 | 已由 `RuntimeMigrationSource` 按环境加载 `.ts`/`.js`（对外 name 恒为 `.ts`、零 DB 写入、零新增迁移）；正常启动日志为 `[db] migrations up to date`，若异常先确认 `dist/migrations` 随包上传完整 |
 | `/health` / `/ready` 返回非预期 404，或响应头带 `X-Powered-By: Express` | 请求打到了同机另一 Express 服务，说明 **JobHub 进程当前没在监听**（JobHub 是 Fastify，不发该头；常见原因是后台进程被终止，**不是端口冲突，也不是 `/ready` 或迁移实现故障**）。判据：`netstat -ano` 查 `:3000` 应能看到 JobHub 的 `127.0.0.1:3000 LISTENING` node 进程；若只有 `0.0.0.0:3000` / `[::]:3000` 通配监听，就是 JobHub 没起来，重新启动应用即可（Windows 下更具体的 `127.0.0.1` 绑定优先于通配地址，无需先释放那个 Express 或改 `PORT`）。启动后复验 `/ready`=200。**部署脚本 `prepare-public.mjs` 只做本地文件拷贝、不连任何端口，与此无关** |
+| 调 `POST /api/v1/import` 返回 **413** | 本服务的请求体上限是**按路由区分**的：`/import` **10 MB**、其余接口 **2 MB**。**先看响应体是不是 JSON**：若响应体是 HTML 错误页（不是 `{code,data,message}`），说明请求被前置 **Nginx / Apache / Passenger** 拦掉了，要改代理配置而不是查应用日志——Nginx `client_max_body_size 10m;`、Apache `LimitRequestBody 10485760`。若响应体是本服务的 JSON 包裹，则是数据本身超限，**分批导入**（如 `apps` 每 500 条一组），不要靠无限调大上限绕过 |
 
 ## 关键约定
 
@@ -117,3 +121,62 @@ pnpm dev:client        # http://localhost:5173
 - MariaDB JSON 列不支持 DEFAULT，应用层显式写入（空 `[]`/`{}`；`self_scores` 可 `NULL`）。
 - 统计单一事实源：概览/复盘/命中率/年包/弱点/streak 全部从源表实时计算，唯一例外是 `weekly_reviews.*_override`。
 - 状态变更必须写 `app_events`（事务），时间轴不可手改。
+
+## 外部程序接入（脚本 / AI 助手 / 第三方系统）
+
+浏览器之外的调用方（运维脚本、批量导入、AI 助手、CI）推荐用 **`X-API-Key`** 鉴权，不必登录、不受 7 天会话过期影响。
+
+### 1. Key 在哪配
+
+- 配置项在 **`server/.env`**（生产由 cPanel 环境变量注入，见上文「部署」），模板见根 `.env.example`：
+
+```dotenv
+# 外部程序调用业务接口用的 API Key（留空 = 关闭该通道）
+JOBHUB_API_KEY=<YOUR_API_KEY>
+# 可选：限制 API Key 只允许来自这些 IP（逗号分隔，留空不限制）
+JOBHUB_API_KEY_ALLOW_IPS=
+```
+
+- 生成方式（**不要手写弱口令**）：
+
+```bash
+node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
+```
+
+- 修改后**必须重启应用**才生效（配置在启动时读取，无热更新）。
+
+### 2. 怎么传给调用方
+
+- 请求头：`X-API-Key: <YOUR_API_KEY>`，与 cookie / `Authorization: Bearer` 三者**任一**通过即视为已认证。
+- 交付方式：通过密码管理器 / 内网密钥库 / 部署系统的 secret 变量传递，**不要**用聊天、邮件明文或写进仓库。
+- 调用方示例（curl）：
+
+```bash
+curl -s http://127.0.0.1:3000/api/v1/apps?page=1&pageSize=20 \
+  -H "X-API-Key: $JOBHUB_API_KEY"
+```
+
+### 3. 轮换与吊销
+
+| 动作 | 步骤 | 生效 |
+|---|---|---|
+| 轮换 | 生成新 Key → 写入 `server/.env` 的 `JOBHUB_API_KEY` → 重启应用 → 通知调用方换新 Key | 重启后**旧 Key 立即失效** |
+| 吊销 | 把 `JOBHUB_API_KEY` **置空** → 重启应用 | 重启后 API Key 通道整体关闭，仅保留登录态 |
+| 紧急处置 | 疑似泄露时立刻替换为新随机串并重启，再复核访问日志 | 同上 |
+
+> 同一时间只支持**一个** Key，轮换存在切换窗口，请在维护窗口执行并提前通知调用方。
+
+### 4. 安全建议
+
+- **只在内网或 HTTPS 下使用**；明文 HTTP 传 Key 等于泄露。
+- **不要把 Key 写进前端代码**（Vite 打包后等同于公开）；浏览器场景请走登录 + httpOnly cookie。
+- 配 `JOBHUB_API_KEY_ALLOW_IPS` 做来源限制，并在网关层做限流（服务端当前未内置限流）。
+- 建议 90 天轮换一次；人员变动或调用方下线时立即轮换。
+- Key 与 `JWT_SECRET`、`DB_PASSWORD` 同级对待：不进版本库、不进日志、不进截图。
+
+### 5. 相关文档
+
+- 完整接口清单（含每个接口的参数表、请求/响应示例、错误码、curl 示例）：**`docs/api-reference.md`**
+- 机器可读规范（OpenAPI 3.1，可导入 Postman / Apifox / Swagger UI）：**`docs/openapi.yaml`**
+- 批量导入的数据字段定义与去重规则：**`docs/import-schema.md`**
+

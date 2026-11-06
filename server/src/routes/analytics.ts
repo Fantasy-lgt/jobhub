@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { ok, badRequest } from '../lib/http';
+import { db } from '../db';
+import { ok, badRequest, notFound } from '../lib/http';
 import {
   indicatorsQuerySchema,
   trendUpdateSchema,
@@ -68,5 +69,16 @@ export async function analyticsRoutes(app: FastifyInstance): Promise<void> {
     const { weekStart } = weekStartParamSchema.parse(request.params);
     const body = weeklyReviewSchema.parse(request.body);
     return ok(await upsertWeeklyReview(request.userId, weekStart, body), '已更新');
+  });
+
+  // 删除某周复盘：按 user_id + week_start 精确删除，找不到返回 404。
+  // 说明：此次改造的文件边界不含 services/analytics.service.ts，故删除逻辑内联在路由层（仅一条 delete，无业务分支）。
+  app.delete('/analytics/weekly-reviews/:weekStart', async (request) => {
+    const { weekStart } = weekStartParamSchema.parse(request.params);
+    const deleted = await db('weekly_reviews')
+      .where({ user_id: request.userId, week_start: weekStart })
+      .del();
+    if (!deleted) throw notFound('该周的复盘记录不存在');
+    return ok(null, '已删除');
   });
 }

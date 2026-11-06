@@ -6,6 +6,7 @@ import { authPlugin } from './plugins/auth';
 import { errorHandlerPlugin } from './plugins/error-handler';
 import { checkReadiness } from './db';
 import { registerRoutes } from './routes';
+import { config } from './config';
 
 /** 构造 Fastify 实例：插件 + 路由 + 静态托管 + SPA fallback。 */
 export function buildApp(): FastifyInstance {
@@ -13,8 +14,12 @@ export function buildApp(): FastifyInstance {
     logger: {
       level: process.env.LOG_LEVEL || 'info',
     },
-    // 统一响应体较大（聚合接口），放宽默认限制
+    // 统一响应体较大（聚合接口），放宽默认限制；POST /import 单独放宽到 10MB
     bodyLimit: 2 * 1024 * 1024,
+    // 反向代理（cPanel/Passenger/Nginx）下取真实客户端 IP：
+    // 不信任代理时 request.ip 会是代理地址，会让 IP 白名单与限流全部失效。
+    // 默认 false；生产按 TRUST_PROXY 配置，单层代理推荐 1（而不是 true，避免 XFF 伪造绕过）。
+    trustProxy: config.trustProxy,
   });
 
   app.register(errorHandlerPlugin);
