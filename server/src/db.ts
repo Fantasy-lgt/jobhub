@@ -111,6 +111,9 @@ export const db: Knex = knex({
   pool: {
     min: 0,
     max: 5,
+    // 远程 DB 会主动掐断空闲连接；把空闲回收窗口压到 8s，远小于远端 kill 阈值，
+    // 避免池子里残留「已死但未回收」的连接导致查询挂起（表现为 /ready 偶发 503）。
+    idleTimeoutMillis: 8000,
     acquireTimeoutMillis: 8000,
   },
   migrations: {

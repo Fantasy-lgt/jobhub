@@ -18,6 +18,7 @@
     "migrate": "pnpm --filter @jobhub/server migrate",
     "seed": "pnpm --filter @jobhub/server seed",
     "import:data": "node scripts/import-data.mjs",
-    "typecheck": "pnpm --filter @jobhub/server typecheck"
+    "typecheck": "pnpm --filter @jobhub/server typecheck",
+    "start": "node server/dist/index.js"
   }
 }
