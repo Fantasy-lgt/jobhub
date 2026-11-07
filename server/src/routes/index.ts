@@ -12,6 +12,7 @@ import { roadmapRoutes } from './roadmap';
 import { aiRoutes } from './ai';
 import { exportRoutes } from './export';
 import { importRoutes } from './import';
+import { recycleRoutes } from './recycle';
 
 /**
  * 注册全部路由：/api/v1/auth 免登录，其余 /api/v1/* 需鉴权。
@@ -25,8 +26,8 @@ import { importRoutes } from './import';
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(authRoutes, { prefix: '/api/v1/auth' });
 
-  // 导出接口自带 requireAuth，单独注册避免与 protectedScope 的 preHandler 重复执行；
-  // 因此 /export 仅支持 cookie / Bearer（浏览器下载场景），不接受 X-API-Key。
+  // 导出接口单独注册（prefix /api/v1），其 preHandler 为 requireApiKeyOrAuth，
+  // 因此 /export 同时支持 cookie / Bearer（浏览器下载）与 X-API-Key（外部程序备份）。
   await app.register(exportRoutes, { prefix: '/api/v1' });
 
   await app.register(
@@ -43,6 +44,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       await protectedScope.register(aiRoutes);
       // 对外批量导入（豆包产出的 JSON 由主理人本地导入）
       await protectedScope.register(importRoutes);
+      // 回收站：软删记录的列表 / 恢复 / 彻底删除（受组合鉴权保护）
+      await protectedScope.register(recycleRoutes);
     },
     { prefix: '/api/v1' },
   );

@@ -11,6 +11,19 @@ export { analyticsApi } from './analytics'
 export { roadmapApi } from './roadmap'
 export { aiApi } from './ai'
 export { exportApi } from './export'
+export { importApi } from './import'
+export { IMPORT_STAT_KEYS, IMPORT_STAT_LABEL } from './import'
+export type {
+  ImportResult,
+  ImportStats,
+  ImportStatKey,
+  ImportMode,
+  ImportPayloadData,
+  ImportError,
+} from './import'
+export { recycleApi } from './recycle'
+export { RECYCLE_TYPES, RECYCLE_TYPE_LABEL } from './recycle'
+export type { RecycleList, RecycleItem, RecycleType } from './recycle'
 
 /**
  * 跨页派生数据统一失效：任一写操作完成后调用。

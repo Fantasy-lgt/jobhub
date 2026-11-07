@@ -157,6 +157,8 @@ curl -s http://127.0.0.1:3000/api/v1/apps?page=1&pageSize=20 \
   -H "X-API-Key: $JOBHUB_API_KEY"
 ```
 
+> 说明：外部程序也可用 `X-API-Key` 直接调用 `GET /api/v1/export` 做全量备份（此前仅支持登录态）。完整接口与示例见 `docs/api-reference.md`，机器可读规范见 `docs/openapi.yaml`。
+
 ### 3. 轮换与吊销
 
 | 动作 | 步骤 | 生效 |
@@ -205,5 +207,5 @@ pnpm import:data ./我的投递记录.json --write --mode=replace
 脚本会读取 `server/.env` 里的 `JOBHUB_API_KEY`，默认连 `http://127.0.0.1:3000`（可用环境变量 `BASE_URL` 覆盖）。
 演练返回 `errors` 非空时脚本会拒绝实写，并逐条打印出错位置——把这些位置反馈给助手修正后重新导出即可。
 
-> 安全提示：`replace` 是物理删除，不可逆。执行前先用 `GET /api/v1/export` 或 `backups/` 留一份备份。
+> 安全提示：`replace` 是物理删除，不可逆。执行前先用 `GET /api/v1/export`（支持登录态或 `X-API-Key`）或 `backups/` 留一份备份。
 

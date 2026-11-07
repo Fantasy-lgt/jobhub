@@ -174,7 +174,21 @@ export const REQUIRED_BUSINESS_TABLES: readonly string[] = [
   'checkins',
 ];
 
-export const EXPECTED_MIGRATIONS = 14;
+/**
+ * 期望迁移数 = 迁移目录中的文件数量（开发 .ts / 生产 .js，由 resolveDataDirs 已选定其一）。
+ * 新增迁移时此处自动 +1，无需手动维护魔法数字；目录不可达时降级为 0（由 ready 给出明确信号）。
+ */
+function countExpectedMigrations(): number {
+  try {
+    return fs
+      .readdirSync(migrationDir)
+      .filter((file) => file.endsWith(`.${migrationExtension}`)).length;
+  } catch {
+    return 0;
+  }
+}
+
+export const EXPECTED_MIGRATIONS = countExpectedMigrations();
 
 export interface ReadinessResult {
   ready: boolean;

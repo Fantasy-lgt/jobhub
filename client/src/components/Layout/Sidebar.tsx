@@ -17,7 +17,8 @@ const NAV: NavItem[] = [
   { to: '/qbank', icon: '📚', label: '题库' },
   { to: '/offers', icon: '🎉', label: 'Offer' },
   { to: '/analytics', icon: '📈', label: '分析' },
-  { to: '/roadmap', icon: '🧱', label: '路线', soon: true },
+  { to: '/roadmap', icon: '🧱', label: '路线' },
+  { to: '/recycle', icon: '🗑️', label: '回收站' },
 ]
 
 /** PC 侧边栏（236px）：logo + 8 项导航 + 底部设置/主题切换。 */

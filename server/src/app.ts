@@ -22,6 +22,22 @@ export function buildApp(): FastifyInstance {
     trustProxy: config.trustProxy,
   });
 
+  // 允许 content-type=application/json 但 body 为空的请求（如回收站 restore 的无 payload POST）。
+  // Fastify 默认 JSON 解析器在 content-type=json 且 body 为空时会抛 FST_ERR_CTP_EMPTY_JSON_BODY，
+  // 导致前端 http.post 不带 body、或外部程序空 body POST 一律 500。这里将空 body 解析为 {}。
+  // 需要 body 的路由仍由 zod schema 校验，空 {} 会按「缺少必填字段」正常返回 400，不会弱化校验。
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (request, body, done) => {
+    if (body === '' || body == null) {
+      done(null, {});
+      return;
+    }
+    try {
+      done(null, JSON.parse(body as string));
+    } catch (err) {
+      done(err as Error, undefined);
+    }
+  });
+
   app.register(errorHandlerPlugin);
   app.register(authPlugin);
 

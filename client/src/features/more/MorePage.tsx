@@ -13,7 +13,8 @@ const ITEMS: MoreItem[] = [
   { to: '/profile', icon: '🧭', label: '求职定位' },
   { to: '/offers', icon: '🎉', label: 'Offer 决策' },
   { to: '/analytics', icon: '📈', label: '数据复盘' },
-  { to: '/roadmap', icon: '🧱', label: '冲刺路线', soon: true },
+  { to: '/roadmap', icon: '🧱', label: '冲刺路线' },
+  { to: '/recycle', icon: '🗑️', label: '回收站' },
   { to: '/settings', icon: '⚙️', label: '设置' },
 ]
 

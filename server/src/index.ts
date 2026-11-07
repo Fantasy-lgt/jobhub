@@ -3,6 +3,7 @@ import { buildApp } from './app';
 import { assertProductionConfig, config, resolveJwtSecret } from './config';
 import { db, runMigrations } from './db';
 import { runSeed } from './seed';
+import { purgeExpiredRecycled } from './services/recycle.service';
 
 /**
  * Bootstrap：启动时幂等执行迁移 + seed，然后监听 PORT || 3000。
@@ -127,6 +128,38 @@ async function main(): Promise<void> {
     app.log.error(`[server] failed to listen: ${messageOf(err)}`);
     process.exit(1);
   }
+
+  // 回收站自动清理：每 6 小时物理清除「超过 7 天仍未恢复」的软删记录。
+  // purgeExpiredRecycled 内部 WHERE 强制 deleted_at IS NOT NULL，绝不碰有效数据。
+  const RECYCLE_PURGE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+  const recycleTimer = setInterval(() => {
+    purgeExpiredRecycled(7)
+      .then((res) => {
+        if (res.total > 0) {
+          app.log.info(`[recycle] 已清理 ${res.total} 条过期回收记录：${JSON.stringify(res.byType)}`);
+        }
+      })
+      .catch((err) => app.log.error({ err }, '[recycle] 自动清理失败'));
+  }, RECYCLE_PURGE_INTERVAL_MS);
+  // 不阻止进程退出：server.listen 已维持存活，定时器只是附带任务
+  recycleTimer.unref?.();
+
+  // 优雅关闭：先停定时器，再关 server 与连接池
+  const shutdown = async (signal: string): Promise<void> => {
+    app.log.info(`[server] 收到 ${signal}，开始优雅关闭`);
+    clearInterval(recycleTimer);
+    try {
+      await app.close();
+    } finally {
+      try {
+        await db.destroy();
+      } finally {
+        process.exit(0);
+      }
+    }
+  };
+  process.once('SIGINT', () => void shutdown('SIGINT'));
+  process.once('SIGTERM', () => void shutdown('SIGTERM'));
 }
 
 main();

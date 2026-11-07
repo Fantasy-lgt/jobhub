@@ -12,6 +12,7 @@ import { AnalyticsPage } from './features/analytics'
 import { RoadmapPage } from './features/roadmap'
 import { SettingsPage } from './features/settings'
 import { MorePage } from './features/more'
+import { RecyclePage } from './features/recycle'
 
 function FullPageLoading() {
   return (
@@ -48,6 +49,7 @@ export function AppRouter() {
           <Route path="/analytics" element={<AnalyticsPage />} />
           <Route path="/roadmap" element={<RoadmapPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/recycle" element={<RecyclePage />} />
           <Route path="/more" element={<MorePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
