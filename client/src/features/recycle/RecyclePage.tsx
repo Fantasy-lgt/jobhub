@@ -3,12 +3,22 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button, Card, ConfirmDialog, EmptyState, ErrorRetry } from '../../components'
 import {
   recycleApi,
+  invalidateDerivedQueries,
   type RecycleList,
   type RecycleType,
   RECYCLE_TYPES,
   RECYCLE_TYPE_LABEL,
 } from '../../api/endpoints'
+import { USE_MOCK } from '../../api/config'
 import { useUiStore } from '../../stores/ui'
+
+/** 恢复后需一并失效的业务列表 queryKey（前缀匹配，覆盖其所有子 key）。 */
+const LIST_QUERY_KEY: Record<RecycleType, string> = {
+  apps: 'apps',
+  resumes: 'resumes',
+  interviews: 'interviews',
+  offers: 'offers',
+}
 
 /**
  * 回收站：列出软删的 apps/resumes/interviews/offers，按类型切 tab，
@@ -31,8 +41,13 @@ export function RecyclePage() {
     queryFn: recycleApi.list,
   })
 
-  const refresh = (): void => {
+  /** 刷新回收站；恢复时按类型一并失效原业务列表与派生统计，避免切回列表仍是旧数据。 */
+  const refresh = (restoredType?: RecycleType): void => {
     void qc.invalidateQueries({ queryKey: ['recycle'] })
+    if (restoredType) {
+      void qc.invalidateQueries({ queryKey: [LIST_QUERY_KEY[restoredType]] })
+      invalidateDerivedQueries(qc)
+    }
   }
 
   const handleRestore = async (type: RecycleType, id: number): Promise<void> => {
@@ -40,7 +55,7 @@ export function RecyclePage() {
     try {
       await recycleApi.restore(type, id)
       pushToast({ message: '已恢复到原列表', kind: 'success' })
-      refresh()
+      refresh(type)
     } catch {
       // 错误已由 http 层 toast
     } finally {
@@ -73,6 +88,14 @@ export function RecyclePage() {
           误删的岗位 / 简历 / 面试 / Offer 可在此恢复，或彻底删除（彻底删除不可恢复，7 天后自动清理）。
         </p>
       </header>
+
+      {USE_MOCK && (
+        <Card>
+          <div style={{ fontSize: 13, color: 'var(--warn, #b45309)', lineHeight: 1.6 }}>
+            ⚠️ 当前为 mock 演示模式（VITE_USE_MOCK=true），下方数据是本地假数据，不代表真实记录，恢复 / 彻底删除也不会写库。
+          </div>
+        </Card>
+      )}
 
       <div className="jh-toolbar" style={{ flexWrap: 'wrap', gap: 8 }}>
         {RECYCLE_TYPES.map((t) => (

@@ -47,6 +47,17 @@ export const errorHandlerPlugin = fp(async (app) => {
       });
     }
 
+    // 请求体解析错误：非法 JSON / 空 body / content-type 解析失败都属于客户端输入错误(4xx)。
+    // Fastify 内建 CT P 错误自带 400，但自定义 parser 抛的原生 SyntaxError 不带 statusCode，
+    // 若不在此拦截会被下方兜底成 500，把 4xx 误报成服务端故障并污染告警与重试策略。
+    if (error instanceof SyntaxError || String(error.code ?? '').startsWith('FST_ERR_CTP_')) {
+      return reply.status(400).send({
+        code: 400,
+        data: null,
+        message: '请求体不是合法的 JSON',
+      });
+    }
+
     request.log.error(error);
     return reply.status(500).send({
       code: 500,

@@ -7,6 +7,7 @@ import { errorHandlerPlugin } from './plugins/error-handler';
 import { checkReadiness } from './db';
 import { registerRoutes } from './routes';
 import { config } from './config';
+import { badRequest } from './lib/http';
 
 /** 构造 Fastify 实例：插件 + 路由 + 静态托管 + SPA fallback。 */
 export function buildApp(): FastifyInstance {
@@ -26,6 +27,8 @@ export function buildApp(): FastifyInstance {
   // Fastify 默认 JSON 解析器在 content-type=json 且 body 为空时会抛 FST_ERR_CTP_EMPTY_JSON_BODY，
   // 导致前端 http.post 不带 body、或外部程序空 body POST 一律 500。这里将空 body 解析为 {}。
   // 需要 body 的路由仍由 zod schema 校验，空 {} 会按「缺少必填字段」正常返回 400，不会弱化校验。
+  // 非法 JSON 属于客户端输入错误，必须包装成 AppError(400)；裸 SyntaxError 会被
+  // error-handler 兜底成 500，把 4xx 误报成服务端故障（影响全部 application/json 写接口）。
   app.addContentTypeParser('application/json', { parseAs: 'string' }, (request, body, done) => {
     if (body === '' || body == null) {
       done(null, {});
@@ -33,8 +36,8 @@ export function buildApp(): FastifyInstance {
     }
     try {
       done(null, JSON.parse(body as string));
-    } catch (err) {
-      done(err as Error, undefined);
+    } catch {
+      done(badRequest('请求体不是合法的 JSON'), undefined);
     }
   });
 
