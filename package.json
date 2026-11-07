@@ -4,6 +4,11 @@
   "private": true,
   "description": "JobHub · 个人求职工作台（React + Node/TS + MariaDB 单体）",
   "packageManager": "pnpm@9.15.0",
+  "main": "server/dist/index.js",
+  "workspaces": [
+    "server",
+    "client"
+  ],
   "engines": {
     "node": ">=18.18"
   },
@@ -11,14 +16,14 @@
     "dev": "pnpm --filter @jobhub/server dev",
     "dev:server": "pnpm --filter @jobhub/server dev",
     "dev:client": "pnpm --filter @jobhub/client dev",
-    "build": "pnpm --filter @jobhub/server build && pnpm --filter @jobhub/client build",
+    "build": "cd server && npm run build && cd ../client && npm run build && cd .. && node scripts/prepare-public.mjs",
     "build:server": "pnpm --filter @jobhub/server build",
     "build:client": "pnpm --filter @jobhub/client build",
-    "build:deploy": "pnpm build && node scripts/prepare-public.mjs",
+    "build:deploy": "npm run build",
     "migrate": "pnpm --filter @jobhub/server migrate",
     "seed": "pnpm --filter @jobhub/server seed",
     "import:data": "node scripts/import-data.mjs",
     "typecheck": "pnpm --filter @jobhub/server typecheck",
-    "start": "node server/dist/index.js"
+    "start": "NODE_ENV=production node server/dist/index.js"
   }
 }

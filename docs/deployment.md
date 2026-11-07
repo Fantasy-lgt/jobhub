@@ -51,8 +51,9 @@
 
 ```ini
 NODE_ENV=production
-# 配合 Nginx 时监听回环即可；裸跑（方案 B）改为 0.0.0.0
-HOST=127.0.0.1
+# 默认即监听 0.0.0.0（config.ts 已写死默认），Nginx/裸跑/GoDaddy 都能收到流量；
+# 仅在需要「只听回环」时显式设为 127.0.0.1
+HOST=0.0.0.0
 PORT=3000
 # Nginx 一层反代必须设 1（不要设 true，避免 X-Forwarded-For 伪造绕过白名单/限流）
 TRUST_PROXY=1
@@ -291,3 +292,90 @@ curl -b cookies.txt http://127.0.0.1:3000/api/v1/apps?limit=1   # → 200 + 数�
 - `TRUST_PROXY=1`（非 `true`），防止伪造客户端 IP 绕过白名单/限流。
 - `JOBHUB_API_KEY` 按需开启，可配 `JOBHUB_API_KEY_ALLOW_IPS` 限制来源。
 - 强制 HTTPS（HSTS 可选）；cookie 为 `httpOnly` + `SameSite=Lax`，`secure` 随 `isProd` 自动开启。
+
+---
+
+## 11. GoDaddy Node.js Hosting 部署（PaaS，零运维）
+
+> GoDaddy Node.js Hosting 是托管 PaaS：上传代码（ZIP 或连 GitHub），平台自动 `npm install`
+> → `npm run build` → `npm start`，自带 HTTPS + CDN + WAF。预览免费，发布需 Web Hosting 套餐后点
+> 「Publish Now」。本仓库**已按平台要求改造**，可直接部署。
+
+### 11.1 平台契约（决定我们为何这样改）
+
+| 平台行为 | 我们的应对 |
+|----------|-----------|
+| 只读 `dependencies`，不装 `devDependencies`（等价 `npm install --production`） | 把构建工具 `typescript`/`vite`/`@vitejs/plugin-react`/`@types/*` 从 `devDependencies` 移到 `dependencies` |
+| 用 **npm**（非 pnpm）跑 `npm run build` / `npm start` | 根 `build` 脚本改用 `cd server && npm run build && cd ../client && npm run build && cd .. && node scripts/prepare-public.mjs`（不依赖 `--filter`，pnpm/npm 通吃）|
+| 需要根 `package.json` 有 `name`/`version`/`main`/`build`/`start` | 已补齐 `main: server/dist/index.js`，`start: NODE_ENV=production node server/dist/index.js` |
+| 单仓库子包需被 npm 识别 | 根 `package.json` 增加 `"workspaces": ["server","client"]`（pnpm 的 `pnpm-workspace.yaml` 并存，互不影响）|
+| 必须监听 `process.env.PORT` 且 host `0.0.0.0` | `config.ts` 默认 `host=0.0.0.0`，`port=process.env.PORT||3000` |
+| 推荐声明 Node 版本 | `engines.node: ">=18.18"`（GoDaddy 提供 Node 22，满足）|
+
+> 因此之前 `NODE_ENV=production pnpm run build failed` 的根因是：① 构建工具在 `devDependencies`
+> 被平台跳过；② 根 `build` 用了 `pnpm --filter`（npm 不认识）。现已修复。
+
+### 11.2 必填环境变量（GoDaddy 控制台 → App → Settings → Manage secrets / Environment）
+
+GoDaddy 不读你的 `.env` 文件，全部通过平台环境变量注入。生产模式 `assertProductionConfig()`
+强制要求以下两项，**缺失会直接拒绝启动**：
+
+```ini
+NODE_ENV=production          # start 脚本已写死，无需手动设；留着也无害
+JWT_SECRET=<32+ 位随机串>     # openssl rand -base64 32
+ADMIN_PASSWORD=<admin 登录密码>
+
+# 远程 MariaDB（当前沿用 68.178.239.252；详见 11.4 授权坑）
+DB_HOST=68.178.239.252
+DB_PORT=3306
+DB_USER=Klinevargas
+DB_PASSWORD=<生产强密码>
+DB_NAME=jobhub
+DB_SSL=false                 # 远程库若要求 SSL 改 true
+
+# 可选
+JOBHUB_API_KEY=<openssl rand -base64 24>   # 留空则禁用外部 X-API-Key 通道
+DEEPSEEK_API_KEY=sk-xxx                   # 留空则 AI 逐题分析降级为机检
+```
+
+### 11.3 部署步骤（GitHub 连接，推荐）
+
+1. GoDaddy Node.js Hosting → **Connect GitHub** → 选 `Fantasy-lgt/jobhub` 仓库、分支 `master`。
+2. 平台自动拉取 → `npm install`（仅 dependencies）→ `npm run build` → `npm start`。
+3. 打开 **Preview URL** 验证；一切正常后点 **Publish Now** 绑定域名/上线。
+4. 之后每次 `git push` 到 `master` 触发自动重新部署（无需重新上传）。
+
+> 若用 ZIP 上传：在仓库根目录打包（**排除 `node_modules/`、`.env`、`server/dist`、`client/dist`、
+> `server/public`**；平台自行 build），≤100MB。
+
+### 11.4 数据库授权坑（部署最常见失败点）
+
+远程 MariaDB 在 `68.178.239.252`。GoDaddy 应用服务器出口 IP 必须被 MariaDB 用户 `Klinevargas`
+授权，且 3306 放行：
+
+```sql
+-- 在 MariaDB 侧执行（或用原授权 IP 的账号）：
+GRANT ALL ON jobhub.* TO 'Klinevargas'@'<GODADDY_EGRESS_IP>' IDENTIFIED BY '<密码>';
+FLUSH PRIVILEGES;
+```
+
+- 取 GoDaddy 出口 IP：预览日志里看连接报错里的 client IP，或联系 GoDaddy 支持索取 egress 段。
+- 若远程库始终连不通，**兜底方案**是改用 GoDaddy 自带的 **Managed MySQL**（平台内创建，同网段免授权），
+  再把 `DB_*` 换成托管库的连接信息，并用 `mysqldump` 把现有 `jobhub` 数据迁过去。
+- 迁移与 seed 已在 `index.ts` 启动时**幂等自动执行**，平台无需手动跑 migrate。
+
+### 11.5 验证与排错
+
+```bash
+# 预览 URL 根路径应返回前端 HTML；探针：
+curl -fsS https://<preview>.godaddysites.com/ready   # → status:"ready", appliedMigrations:14
+curl -fsS https://<preview>.godaddysites.com/health  # → {"code":0,...}
+```
+
+| 现象 | 原因 / 处理 |
+|------|------------|
+| Build failed | 看构建日志：确认 `npm run build` 能跑（已在本地用 npm 验证通过）。若仍失败，多为依赖缺失 → 检查是否误把运行时包留在 `devDependencies` |
+| App won't start / 立即退出 | `JWT_SECRET` 或 `ADMIN_PASSWORD` 未设（生产断言拒绝启动）；或 `DB_*` 连不上（见 11.4）|
+| 页面能开但 API 全 502/超时 | 远程库未授权 GoDaddy 出口 IP（11.4），或 `DB_SSL` 需设 true |
+| 前端白屏 | `server/public` 未生成 → `npm run build` 里 `prepare-public.mjs` 失败，看构建日志 |
+

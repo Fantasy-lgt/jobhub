@@ -78,7 +78,9 @@ export const config: AppConfig = {
   isProd: process.env.NODE_ENV === 'production',
   // 共享主机（Phusion Passenger）会注入 PORT，本地默认 3000
   port: toNumber(process.env.PORT, 3000),
-  host: process.env.HOST || '127.0.0.1',
+  // GoDaddy / 容器平台通过反向代理访问，必须监听 0.0.0.0 才能收到流量；
+  // 本地开发 bind 0.0.0.0 同样可在 127.0.0.1 访问，无副作用。可用 HOST 环境变量覆盖。
+  host: process.env.HOST || '0.0.0.0',
   db: {
     host: process.env.DB_HOST || '127.0.0.1',
     port: toNumber(process.env.DB_PORT, 3306),
